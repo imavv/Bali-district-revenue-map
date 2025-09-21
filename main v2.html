@@ -184,6 +184,52 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         }
 
+        /* NEW: Bar chart container styles - UPDATED for SVG chart */
+        .chart-container {
+            flex: 1;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            padding: 20px;
+            max-width: 350px;
+            height: auto;
+        }
+
+        .chart-title {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #444;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .chart-svg {
+            width: 100%;
+            height: 400px;
+        }
+
+        .bar-rect {
+            cursor: pointer;
+            transition: opacity 0.3s ease;
+        }
+
+        .bar-rect:hover {
+            opacity: 0.8;
+        }
+
+        .bar-label {
+            font-size: 12px;
+            fill: #444;
+            font-weight: 500;
+        }
+
+        .bar-value {
+            font-size: 11px;
+            fill: #666;
+            font-weight: 600;
+        }
+        /* END NEW: Bar chart container styles - UPDATED for SVG chart */
+
         .legend {
             min-width: 120px;
         }
@@ -279,6 +325,13 @@
             .map-container {
                 flex-direction: column;
             }
+
+             /* NEW: Mobile responsive styles for bar chart */
+            .chart-container {
+                min-width: auto;
+                margin: 20px 0;
+            }
+            /* END NEW: Mobile responsive styles for bar chart */
             
             .stats-grid {
                 grid-template-columns: 1fr;
@@ -291,12 +344,6 @@
         <div class="header">
             <h1>Bali District Revenue Dashboard</h1>
             <p>Interactive visualization of government revenue across Bali's districts</p>
-        </div>
-
-        <div class="stats-section">
-            <div class="stats-grid" id="statsGrid">
-                <!-- Stats cards will be populated by JavaScript -->
-            </div>
         </div>
 
         <div class="controls-section">
@@ -324,9 +371,23 @@
             </div>
         </div>
 
+        <div class="stats-section">
+            <div class="stats-grid" id="statsGrid">
+                <!-- Stats cards will be populated by JavaScript -->
+            </div>
+        </div>
+
         <div class="map-section">
             <div class="map-container">
                 <svg id="map" class="map-svg" width="800" height="600"></svg>
+
+                <!-- NEW: Bar chart container added between map and legend - UPDATED for D3.js SVG -->
+                <div class="chart-container">
+                    <div class="chart-title" id="chartTitle">District Rankings</div>
+                    <svg id="barChart" class="chart-svg"></svg>
+                </div>
+                <!-- END NEW: Bar chart container - UPDATED for D3.js SVG -->
+
                 <div class="legend">
                     <h3>Revenue Scale</h3>
                     <div id="legendItems">
@@ -553,30 +614,6 @@
             }
         );
 
-
-        // districts.forEach(district => {
-        //     revenueData[district] = {};
-        //     populationData[district] = Math.floor(Math.random() * 500000) + 100000; // 100k - 600k population
-            
-        //     timePeriods.forEach(period => {
-        //         const baseRevenue = Math.random() * 50 + 20; // 20-70 billion base
-        //         const seasonalFactor = 1 + 0.3 * Math.sin((period.month - 1) * Math.PI / 6); // Seasonal variation
-        //         const yearGrowth = Math.pow(1.05, period.year - 2018); // 5% annual growth
-                
-        //         const totalRevenue = baseRevenue * seasonalFactor * yearGrowth;
-        //         const padPercent = 0.3 + Math.random() * 0.3; // 30-60% PAD
-        //         const tkddPercent = 0.5 + Math.random() * 0.2; // 50-70% TKDD
-        //         const otherPercent = 1 - padPercent - tkddPercent;
-                
-        //         revenueData[district][`${period.year}-${period.month}`] = {
-        //             total: totalRevenue,
-        //             pad: totalRevenue * padPercent,
-        //             tkdd: totalRevenue * tkddPercent,
-        //             other: totalRevenue * otherPercent
-        //         };
-        //     });
-        // });
-
         // Application state
         let currentTimeIndex = 0;
         let selectedDistrict = null;
@@ -737,6 +774,119 @@
             `;
         }
 
+        // Update bar chart
+        function updateBarChart() {
+            // Check if data is available
+            if (!revenueData || Object.keys(revenueData).length === 0) {
+                console.log("No revenue data available for bar chart");
+                return;
+            }
+
+            const currentPeriod = timePeriods[currentTimeIndex];
+            const key = `${currentPeriod.year}`;
+            
+            // Get data for all districts
+            const chartData = districts.map(district => {
+                if (!revenueData[district] || !revenueData[district][key]) {
+                    console.log(`Missing data for ${district} in ${key}`);
+                    return null;
+                }
+                const data = revenueData[district][key];
+                return {
+                    district: district,
+                    name: baliGeoData.features.find(f => f.properties.code === district).properties.name,
+                    value: data[currentMetric],
+                    color: getDistrictColor(district)
+                };
+            }).filter(d => d !== null); // Remove null entries
+            
+            if (chartData.length === 0) {
+                console.log("No valid chart data");
+                return;
+            }
+            
+            // Sort by value (highest to lowest)
+            chartData.sort((a, b) => b.value - a.value);
+            
+            // Update chart title
+            const metricNames = {
+                total: 'Total Revenue',
+                pad: 'PAD Revenue',
+                tkdd: 'TKDD Revenue',
+                other: 'Other Revenue'
+            };
+            document.getElementById('chartTitle').textContent = `District Rankings - ${metricNames[currentMetric]}`;
+            
+            // Set up dimensions
+            const svg = d3.select("#barChart");
+            const margin = { top: 20, right: 50, bottom: 20, left: 80 };
+            const width = 280 - margin.left - margin.right;
+            const height = 360 - margin.top - margin.bottom;
+            
+            // Clear previous chart
+            svg.selectAll("*").remove();
+            
+            // Create scales
+            const xScale = d3.scaleLinear()
+                .domain([0, d3.max(chartData, d => d.value)])
+                .range([0, width]);
+                
+            const yScale = d3.scaleBand()
+                .domain(chartData.map(d => d.name))
+                .range([0, height])
+                .padding(0.1);
+            
+            // Create main group
+            const g = svg
+                .attr("width", 280)
+                .attr("height", 360)
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+            
+            // Create bars with labels
+            const barGroups = g.selectAll(".bar-group")
+                .data(chartData)
+                .enter()
+                .append("g")
+                .attr("class", "bar-group");
+                
+            // Add rectangles (bars)
+            barGroups.append("rect")
+                .attr("class", "bar-rect")
+                .attr("x", 0)
+                .attr("y", d => yScale(d.name))
+                .attr("width", 0)
+                .attr("height", yScale.bandwidth())
+                .attr("fill", d => d.color)
+                .attr("rx", 2)
+                .transition()
+                .duration(500)
+                .attr("width", d => xScale(d.value));
+            
+            // Add district name labels (left side)
+            barGroups.append("text")
+                .attr("class", "bar-label")
+                .attr("x", -5)
+                .attr("y", d => yScale(d.name) + yScale.bandwidth() / 2)
+                .attr("dy", "0.35em")
+                .attr("text-anchor", "end")
+                .style("font-size", "11px")
+                .style("fill", "#444")
+                .text(d => d.name);
+            
+            // Add value labels (right side of bars)
+            barGroups.append("text")
+                .attr("class", "bar-value")
+                .attr("x", d => Math.max(xScale(d.value) + 3, 20))
+                .attr("y", d => yScale(d.name) + yScale.bandwidth() / 2)
+                .attr("dy", "0.35em")
+                .attr("text-anchor", "start")
+                .style("font-size", "10px")
+                .style("fill", "#666")
+                .style("font-weight", "600")
+                .text(d => `${d.value.toFixed(1)}B`);
+        }
+
         // Update legend
         function updateLegend() {
             const currentPeriod = timePeriods[currentTimeIndex];
@@ -775,6 +925,7 @@
         function updateVisualization() {
             updateTimeDisplay();
             updateStats();
+            updateBarChart(); /* NEW: Added bar chart update call */
             updateLegend();
             svg.selectAll(".district-path")
                 .attr("fill", d => getDistrictColor(d.properties.code));
@@ -844,9 +995,9 @@
             });
         });
 
-        // // Initialize the application
-        // drawMap();
-        // updateVisualization();
+        // Initialize the application
+        drawMap();
+        updateVisualization();
     </script>
 </body>
 </html>
