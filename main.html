@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bali District Revenue Map</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: white;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            color: rgba(255,255,255,0.9);
+            font-size: 1.1em;
+        }
+
+        .stats-section {
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-card h3 {
+            font-size: 0.9em;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+
+        .stat-card .value {
+            font-size: 1.8em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-card .subvalue {
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+
+        .controls-section {
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
+
+        .time-controls {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .slider-container {
+            flex: 1;
+            min-width: 300px;
+        }
+
+        .slider-container label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: #444;
+        }
+
+        .slider {
+            width: 100%;
+            height: 8px;
+            border-radius: 5px;
+            background: linear-gradient(to right, #667eea, #764ba2);
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            background: white;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+        }
+
+        .play-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .play-btn, .speed-btn {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .play-btn:hover, .speed-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .speed-btn.active {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .map-section {
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
+
+        .map-container {
+            display: flex;
+            gap: 25px;
+            align-items: flex-start;
+        }
+
+        .map-svg {
+            flex: 1;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .legend {
+            min-width: 120px;
+        }
+
+        .legend h3 {
+            margin-bottom: 15px;
+            color: #444;
+            font-size: 1.1em;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            margin-right: 10px;
+            border: 1px solid #ddd;
+        }
+
+        .district-path {
+            stroke: white;
+            stroke-width: 1.5;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .district-path:hover {
+            stroke: #333;
+            stroke-width: 2.5;
+        }
+
+        .district-path.selected {
+            stroke: #ff6b6b;
+            stroke-width: 3;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            pointer-events: none;
+            font-size: 0.9em;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            z-index: 1000;
+        }
+
+        .current-time {
+            text-align: center;
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #444;
+            margin-bottom: 15px;
+        }
+
+        .metric-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .metric-btn {
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            color: #495057;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9em;
+        }
+
+        .metric-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: transparent;
+        }
+
+        @media (max-width: 768px) {
+            .time-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .map-container {
+                flex-direction: column;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Bali District Revenue Dashboard</h1>
+            <p>Interactive visualization of government revenue across Bali's districts</p>
+        </div>
+
+        <div class="stats-section">
+            <div class="stats-grid" id="statsGrid">
+                <!-- Stats cards will be populated by JavaScript -->
+            </div>
+        </div>
+
+        <div class="controls-section">
+            <div class="current-time" id="currentTime">January 2018</div>
+            
+            <div class="metric-selector">
+                <button class="metric-btn active" data-metric="total">Total Revenue</button>
+                <button class="metric-btn" data-metric="pad">PAD Revenue</button>
+                <button class="metric-btn" data-metric="tkdd">TKDD Revenue</button>
+                <button class="metric-btn" data-metric="other">Other Revenue</button>
+            </div>
+
+            <div class="time-controls">
+                <div class="slider-container">
+                    <label for="timeSlider">Time Period</label>
+                    <input type="range" id="timeSlider" class="slider" min="0" max="87" value="0">
+                </div>
+                
+                <div class="play-controls">
+                    <button id="playBtn" class="play-btn">▶ Play</button>
+                    <button class="speed-btn" data-speed="500">1x</button>
+                    <button class="speed-btn" data-speed="250">2x</button>
+                    <button class="speed-btn active" data-speed="150">3x</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="map-section">
+            <div class="map-container">
+                <svg id="map" class="map-svg" width="800" height="600"></svg>
+                <div class="legend">
+                    <h3>Revenue Scale</h3>
+                    <div id="legendItems">
+                        <!-- Legend items will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tooltip" id="tooltip" style="display: none;"></div>
+
+    <script>
+        // Bali districts GeoJSON data (simplified coordinates)
+        const baliGeoData = {
+            "type": "FeatureCollection",
+            "features": [
+               {
+                    "type": "Feature",
+                    "properties": { "name": "Jembrana", "code": "JEMBRANA" },
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[
+                            [114.459, -8.172], [114.457, -8.192], [114.494, -8.194], [114.519, -8.205],
+                            [114.532, -8.191], [114.553, -8.198], [114.585, -8.177], [114.619, -8.185],
+                            [114.633, -8.214], [114.685, -8.231], [114.703, -8.199], [114.746, -8.223],
+                            [114.776, -8.263], [114.805, -8.251], [114.825, -8.318], [114.824, -8.333],
+                            [114.865, -8.335], [114.897, -8.358], [114.902, -8.375], [114.929, -8.383],
+                            [114.926, -8.440], [114.916, -8.464], [114.849, -8.439], [114.825, -8.435],
+                            [114.792, -8.410], [114.734, -8.396], [114.632, -8.408], [114.582, -8.398],
+                            [114.576, -8.384], [114.520, -8.330], [114.521, -8.313], [114.485, -8.277],
+                            [114.448, -8.217], [114.432, -8.173], [114.459, -8.172]
+                        ]]
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "properties": { "name": "Tabanan", "code": "TABANAN" },
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[
+                            [115.099, -8.636], [115.059, -8.580], [115.002, -8.540], [114.971, -8.506],
+                            [114.916, -8.464], [114.926, -8.440], [114.929, -8.383], [114.935, -8.357],
+                            [114.950, -8.361], [114.967, -8.304], [114.981, -8.298], [115.020, -8.308],
+                            [115.025, -8.301], [115.071, -8.312], [115.124, -8.308], [115.135, -8.270],
+                            [115.183, -8.245], [115.185, -8.271], [115.200, -8.291], [115.212, -8.332],
+                            [115.198, -8.358], [115.209, -8.379], [115.217, -8.438], [115.179, -8.452],
+                            [115.183, -8.499], [115.150, -8.580], [115.156, -8.601], [115.120, -8.611],
+                            [115.099, -8.636]
+                        ]]
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "properties": { "name": "Badung", "code": "BADUNG" },
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[
+                            [115.238, -8.600], [115.215, -8.596], [115.180, -8.618], [115.176, -8.683],
+                            [115.190, -8.738], [115.181, -8.759], [115.208, -8.786], [115.224, -8.770],
+                            [115.236, -8.803], [115.218, -8.833], [115.170, -8.849], [115.151, -8.847],
+                            [115.122, -8.847], [115.087, -8.836], [115.089, -8.815], [115.123, -8.793],
+                            [115.163, -8.782], [115.159, -8.747], [115.169, -8.724], [115.144, -8.672],
+                            [115.099, -8.636], [115.120, -8.611], [115.156, -8.601], [115.150, -8.580],
+                            [115.183, -8.499], [115.179, -8.452], [115.217, -8.438], [115.209, -8.379],
+                            [115.198, -8.358], [115.212, -8.332], [115.200, -8.291], [115.185, -8.271],
+                            [115.183, -8.245], [115.233, -8.242], [115.251, -8.263], [115.244, -8.295],
+                            [115.251, -8.315], [115.234, -8.358], [115.228, -8.395], [115.231, -8.450],
+                            [115.245, -8.478], [115.230, -8.525], [115.249, -8.574], [115.242, -8.603],
+                            [115.238, -8.600]
+                        ]]
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "properties": { "name": "Denpasar", "code": "DENPASAR" },
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[
+                            [115.238, -8.600], [115.242, -8.603], [115.275, -8.650], [115.261, -8.669],
+                            [115.263, -8.707], [115.246, -8.711], [115.244, -8.737], [115.230, -8.753],
+                            [115.190, -8.738], [115.176, -8.683], [115.180, -8.618], [115.215, -8.596],
+                            [115.238, -8.600]
+                        ]]
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "properties": { "name": "Gianyar", "code": "GIANYAR" },
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[
+                            [115.358, -8.521], [115.371, -8.575], [115.352, -8.584], [115.275, -8.650],
+                            [115.242, -8.603], [115.249, -8.574], [115.230, -8.525], [115.245, -8.478],
+                            [115.231, -8.450], [115.228, -8.395], [115.234, -8.358], [115.251, -8.315],
+                            [115.291, -8.316], [115.294, -8.332], [115.328, -8.331], [115.337, -8.366],
+                            [115.331, -8.414], [115.318, -8.434], [115.324, -8.491], [115.336, -8.523],
+                            [115.358, -8.521]
+                        ]]
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "properties": { "name": "Klungkung", "code": "KLUNGKUNG" },
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[
+                            [115.402, -8.456], [115.415, -8.509], [115.434, -8.519], [115.458, -8.503],
+                            [115.476, -8.520], [115.479, -8.551], [115.428, -8.576], [115.371, -8.575],
+                            [115.358, -8.521], [115.354, -8.512], [115.375, -8.461], [115.402, -8.456]
+                        ]]
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "properties": { "name": "Bangli", "code": "BANGLI" },
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[
+                            [115.436, -8.181], [115.454, -8.198], [115.438, -8.218], [115.449, -8.253],
+                            [115.431, -8.267], [115.422, -8.312], [115.396, -8.357], [115.416, -8.412],
+                            [115.402, -8.456], [115.375, -8.461], [115.354, -8.512], [115.358, -8.521],
+                            [115.336, -8.523], [115.324, -8.491], [115.318, -8.434], [115.331, -8.414],
+                            [115.337, -8.366], [115.328, -8.331], [115.294, -8.332], [115.291, -8.316],
+                            [115.251, -8.315], [115.244, -8.295], [115.251, -8.263], [115.233, -8.242],
+                            [115.243, -8.189], [115.265, -8.166], [115.312, -8.164], [115.323, -8.145],
+                            [115.340, -8.145], [115.399, -8.189], [115.436, -8.181]
+                        ]]
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "properties": { "name": "Karangasem", "code": "KARANGASEM" },
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[
+                            [115.479, -8.551], [115.476, -8.520], [115.458, -8.503], [115.434, -8.519],
+                            [115.415, -8.509], [115.402, -8.456], [115.416, -8.412], [115.396, -8.357],
+                            [115.422, -8.312], [115.431, -8.267], [115.449, -8.253], [115.438, -8.218],
+                            [115.454, -8.198], [115.436, -8.181], [115.457, -8.166], [115.485, -8.180],
+                            [115.507, -8.203], [115.558, -8.231], [115.580, -8.254], [115.642, -8.333],
+                            [115.664, -8.337], [115.699, -8.360], [115.711, -8.400], [115.680, -8.439],
+                            [115.635, -8.462], [115.610, -8.503], [115.581, -8.515], [115.538, -8.501],
+                            [115.509, -8.513], [115.510, -8.540], [115.479, -8.551]
+                        ]]
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "properties": { "name": "Buleleng", "code": "BULELENG" },
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[
+                            [115.457, -8.166], [115.436, -8.181], [115.399, -8.189], [115.340, -8.145],
+                            [115.323, -8.145], [115.312, -8.164], [115.265, -8.166], [115.243, -8.189],
+                            [115.233, -8.242], [115.183, -8.245], [115.135, -8.270], [115.124, -8.308],
+                            [115.071, -8.312], [115.025, -8.301], [115.020, -8.308], [114.981, -8.298],
+                            [114.967, -8.304], [114.950, -8.361], [114.935, -8.357], [114.929, -8.383],
+                            [114.902, -8.375], [114.897, -8.358], [114.865, -8.335], [114.824, -8.333],
+                            [114.825, -8.318], [114.805, -8.251], [114.776, -8.263], [114.746, -8.223],
+                            [114.703, -8.199], [114.685, -8.231], [114.633, -8.214], [114.619, -8.185],
+                            [114.585, -8.177], [114.553, -8.198], [114.532, -8.191], [114.519, -8.205],
+                            [114.494, -8.194], [114.457, -8.192], [114.459, -8.172], [114.445, -8.157],
+                            [114.433, -8.119], [114.445, -8.093], [114.494, -8.096], [114.523, -8.134],
+                            [114.551, -8.134], [114.587, -8.120], [114.594, -8.137], [114.616, -8.126],
+                            [114.656, -8.144], [114.694, -8.144], [114.751, -8.170], [114.818, -8.186],
+                            [114.823, -8.192], [114.876, -8.195], [114.907, -8.183], [114.987, -8.180],
+                            [115.049, -8.144], [115.066, -8.121], [115.115, -8.084], [115.156, -8.065],
+                            [115.184, -8.062], [115.202, -8.072], [115.268, -8.090], [115.296, -8.105],
+                            [115.339, -8.112], [115.358, -8.128], [115.390, -8.136], [115.457, -8.166]
+                        ]]
+                    }
+                }
+            ]
+        };
+
+        // Generate dummy revenue data for all districts and time periods
+        const districts = ["BADUNG", "DENPASAR", "GIANYAR", "KLUNGKUNG", "BANGLI", "KARANGASEM", "TABANAN", "JEMBRANA", "BULELENG"];
+        const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const years = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
+
+        // Generate time periods
+        const timePeriods = [];
+        years.forEach(year => {
+            const maxMonth = year === 2025 ? 8 : 12; // Only up to August 2025
+            for (let month = 1; month <= maxMonth; month++) {
+                timePeriods.push({
+                    year: year,
+                    month: month,
+                    label: `${months[month-1]} ${year}`,
+                    index: timePeriods.length
+                });
+            }
+        });
+
+        // Generate dummy data
+        const revenueData = {};
+        const populationData = {};
+
+        districts.forEach(district => {
+            revenueData[district] = {};
+            populationData[district] = Math.floor(Math.random() * 500000) + 100000; // 100k - 600k population
+            
+            timePeriods.forEach(period => {
+                const baseRevenue = Math.random() * 50 + 20; // 20-70 billion base
+                const seasonalFactor = 1 + 0.3 * Math.sin((period.month - 1) * Math.PI / 6); // Seasonal variation
+                const yearGrowth = Math.pow(1.05, period.year - 2018); // 5% annual growth
+                
+                const totalRevenue = baseRevenue * seasonalFactor * yearGrowth;
+                const padPercent = 0.3 + Math.random() * 0.3; // 30-60% PAD
+                const tkddPercent = 0.5 + Math.random() * 0.2; // 50-70% TKDD
+                const otherPercent = 1 - padPercent - tkddPercent;
+                
+                revenueData[district][`${period.year}-${period.month}`] = {
+                    total: totalRevenue,
+                    pad: totalRevenue * padPercent,
+                    tkdd: totalRevenue * tkddPercent,
+                    other: totalRevenue * otherPercent
+                };
+            });
+        });
+
+        // Application state
+        let currentTimeIndex = 0;
+        let selectedDistrict = null;
+        let currentMetric = 'total';
+        let isPlaying = false;
+        let playSpeed = 150;
+        let playInterval = null;
+
+        // Color scales
+        const colorScales = {
+            total: d3.scaleQuantize().range(['#fee5d9', '#fcbba1', '#fc9272', '#fb6a4a', '#de2d26']),
+            pad: d3.scaleQuantize().range(['#edf8e9', '#bae4b3', '#74c476', '#31a354', '#006d2c']),
+            tkdd: d3.scaleQuantize().range(['#eff3ff', '#bdd7e7', '#6baed6', '#3182bd', '#08519c']),
+            other: d3.scaleQuantize().range(['#f7f7f7', '#cccccc', '#969696', '#636363', '#252525'])
+        };
+
+        // Initialize the map
+        const svg = d3.select("#map");
+        const width = 800;
+        const height = 600;
+
+        // Set up projection
+        const projection = d3.geoMercator()
+            .fitSize([width - 50, height - 50], baliGeoData)
+            //.translate([width/2, height/2]);
+        
+        const path = d3.geoPath().projection(projection);
+
+        // Create tooltip
+        const tooltip = d3.select("#tooltip");
+
+        // Draw the map
+        function drawMap() {
+            svg.selectAll(".district-path").remove();
+            
+            const districts = svg.selectAll(".district-path")
+                .data(baliGeoData.features)
+                .enter()
+                .append("path")
+                .attr("class", "district-path")
+                .attr("d", path)
+                .attr("fill", d => getDistrictColor(d.properties.code))
+                .on("mouseover", function(event, d) {
+                    showTooltip(event, d.properties.code);
+                    d3.select(this).classed("hovered", true);
+                })
+                .on("mouseout", function() {
+                    hideTooltip();
+                    d3.select(this).classed("hovered", false);
+                })
+                .on("click", function(event, d) {
+                    selectDistrict(d.properties.code);
+                });
+        }
+
+        // Get color for district based on current metric and time
+        function getDistrictColor(districtCode) {
+            const currentPeriod = timePeriods[currentTimeIndex];
+            const key = `${currentPeriod.year}-${currentPeriod.month}`;
+            const value = revenueData[districtCode][key][currentMetric];
+            
+            // Update color scale domain
+            const allValues = districts.map(d => revenueData[d][key][currentMetric]);
+            colorScales[currentMetric].domain([d3.min(allValues), d3.max(allValues)]);
+            
+            return colorScales[currentMetric](value);
+        }
+
+        // Show tooltip
+        function showTooltip(event, districtCode) {
+            const currentPeriod = timePeriods[currentTimeIndex];
+            const key = `${currentPeriod.year}-${currentPeriod.month}`;
+            const data = revenueData[districtCode][key];
+            
+            const districtName = baliGeoData.features.find(f => f.properties.code === districtCode).properties.name;
+            
+            tooltip.style("display", "block")
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 10) + "px")
+                .html(`
+                    <strong>${districtName}</strong><br/>
+                    Population: ${populationData[districtCode].toLocaleString()}<br/>
+                    Total Revenue: ${data.total.toFixed(1)}B IDR<br/>
+                    PAD: ${data.pad.toFixed(1)}B IDR<br/>
+                    TKDD: ${data.tkdd.toFixed(1)}B IDR<br/>
+                    Other: ${data.other.toFixed(1)}B IDR
+                `);
+        }
+
+        // Hide tooltip
+        function hideTooltip() {
+            tooltip.style("display", "none");
+        }
+
+        // Select district
+        function selectDistrict(districtCode) {
+            if (selectedDistrict === districtCode) {
+                selectedDistrict = null;
+            } else {
+                selectedDistrict = districtCode;
+            }
+            
+            svg.selectAll(".district-path")
+                .classed("selected", d => d.properties.code === selectedDistrict);
+                
+            updateStats();
+        }
+
+        // Update statistics display
+        function updateStats() {
+            const currentPeriod = timePeriods[currentTimeIndex];
+            const key = `${currentPeriod.year}-${currentPeriod.month}`;
+            
+            let totalPopulation, totalRevenue, totalPAD, totalTKDD, totalOther;
+            let title = "Bali Province";
+            
+            if (selectedDistrict) {
+                const districtName = baliGeoData.features.find(f => f.properties.code === selectedDistrict).properties.name;
+                title = `${districtName} District`;
+                totalPopulation = populationData[selectedDistrict];
+                const data = revenueData[selectedDistrict][key];
+                totalRevenue = data.total;
+                totalPAD = data.pad;
+                totalTKDD = data.tkdd;
+                totalOther = data.other;
+            } else {
+                totalPopulation = districts.reduce((sum, d) => sum + populationData[d], 0);
+                totalRevenue = districts.reduce((sum, d) => sum + revenueData[d][key].total, 0);
+                totalPAD = districts.reduce((sum, d) => sum + revenueData[d][key].pad, 0);
+                totalTKDD = districts.reduce((sum, d) => sum + revenueData[d][key].tkdd, 0);
+                totalOther = districts.reduce((sum, d) => sum + revenueData[d][key].other, 0);
+            }
+            
+            const padPercent = (totalPAD / totalRevenue * 100).toFixed(1);
+            const tkddPercent = (totalTKDD / totalRevenue * 100).toFixed(1);
+            
+            document.getElementById("statsGrid").innerHTML = `
+                <div class="stat-card">
+                    <h3>${title}</h3>
+                    <div class="value">${totalPopulation.toLocaleString()}</div>
+                    <div class="subvalue">Population</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Total Revenue</h3>
+                    <div class="value">${totalRevenue.toFixed(1)}B</div>
+                    <div class="subvalue">IDR</div>
+                </div>
+                <div class="stat-card">
+                    <h3>PAD Revenue</h3>
+                    <div class="value">${totalPAD.toFixed(1)}B</div>
+                    <div class="subvalue">${padPercent}% of total</div>
+                </div>
+                <div class="stat-card">
+                    <h3>TKDD Revenue</h3>
+                    <div class="value">${totalTKDD.toFixed(1)}B</div>
+                    <div class="subvalue">${tkddPercent}% of total</div>
+                </div>
+            `;
+        }
+
+        // Update legend
+        function updateLegend() {
+            const currentPeriod = timePeriods[currentTimeIndex];
+            const key = `${currentPeriod.year}-${currentPeriod.month}`;
+            const allValues = districts.map(d => revenueData[d][key][currentMetric]);
+            const minVal = d3.min(allValues);
+            const maxVal = d3.max(allValues);
+            
+            colorScales[currentMetric].domain([minVal, maxVal]);
+            const range = colorScales[currentMetric].range();
+            const thresholds = colorScales[currentMetric].thresholds();
+            
+            let legendHTML = '';
+            range.forEach((color, i) => {
+                const min = i === 0 ? minVal : thresholds[i-1];
+                const max = i === range.length - 1 ? maxVal : thresholds[i];
+                legendHTML += `
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: ${color}"></div>
+                        <span>${min.toFixed(0)} - ${max.toFixed(0)}B</span>
+                    </div>
+                `;
+            });
+            
+            document.getElementById("legendItems").innerHTML = legendHTML;
+        }
+
+        // Update time display
+        function updateTimeDisplay() {
+            const currentPeriod = timePeriods[currentTimeIndex];
+            document.getElementById("currentTime").textContent = currentPeriod.label;
+            document.getElementById("timeSlider").value = currentTimeIndex;
+        }
+
+        // Update entire visualization
+        function updateVisualization() {
+            updateTimeDisplay();
+            updateStats();
+            updateLegend();
+            svg.selectAll(".district-path")
+                .attr("fill", d => getDistrictColor(d.properties.code));
+        }
+
+        // Animation functions
+        function togglePlay() {
+            const playBtn = document.getElementById("playBtn");
+            if (isPlaying) {
+                stopAnimation();
+                playBtn.textContent = "▶ Play";
+            } else {
+                startAnimation();
+                playBtn.textContent = "⏸ Pause";
+            }
+            isPlaying = !isPlaying;
+        }
+
+        function startAnimation() {
+            if (playInterval) clearInterval(playInterval);
+            playInterval = setInterval(() => {
+                currentTimeIndex = (currentTimeIndex + 1) % timePeriods.length;
+                updateVisualization();
+                
+                if (currentTimeIndex === 0) {
+                    stopAnimation();
+                    document.getElementById("playBtn").textContent = "▶ Play";
+                    isPlaying = false;
+                }
+            }, playSpeed);
+        }
+
+        function stopAnimation() {
+            if (playInterval) {
+                clearInterval(playInterval);
+                playInterval = null;
+            }
+        }
+
+        // Event listeners
+        document.getElementById("timeSlider").addEventListener("input", function() {
+            currentTimeIndex = parseInt(this.value);
+            updateVisualization();
+        });
+
+        document.getElementById("playBtn").addEventListener("click", togglePlay);
+
+        document.querySelectorAll(".speed-btn").forEach(btn => {
+            btn.addEventListener("click", function() {
+                document.querySelectorAll(".speed-btn").forEach(b => b.classList.remove("active"));
+                this.classList.add("active");
+                playSpeed = parseInt(this.dataset.speed);
+                
+                if (isPlaying) {
+                    stopAnimation();
+                    startAnimation();
+                }
+            });
+        });
+
+        document.querySelectorAll(".metric-btn").forEach(btn => {
+            btn.addEventListener("click", function() {
+                document.querySelectorAll(".metric-btn").forEach(b => b.classList.remove("active"));
+                this.classList.add("active");
+                currentMetric = this.dataset.metric;
+                updateVisualization();
+            });
+        });
+
+        // Initialize the application
+        drawMap();
+        updateVisualization();
+    </script>
+</body>
+</html>
